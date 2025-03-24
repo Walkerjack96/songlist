@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>歌詞瀏覽與搜尋系統</title>
+    <style>
+        body {
+            font-family: 'Microsoft JhengHei', Arial, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+            color: #333;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .upload-section {
+            background-color: #f8f9fa;
+            padding: 20px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        .search-section {
+            margin-bottom: 20px;
+        }
+        input[type="text"], input[type="file"], textarea {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        button:hover {
+            background-color: #2980b9;
+        }
+        .song-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+        .song-card {
+            width: calc(33.333% - 20px);
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 15px;
+            background-color: white;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .song-card h3 {
+            margin-top: 0;
+            color: #2c3e50;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+        }
+        .lyrics {
+            white-space: pre-line;
+            max-height: 200px;
+            overflow-y: auto;
+            padding: 10px;
+            background-color: #f9f9f9;
+            border-radius: 4px;
+        }
+        .highlight {
+            background-color: yellow;
+            font-weight: bold;
+        }
+        @media (max-width: 768px) {
+            .song-card {
+                width: calc(50% - 20px);
+            }
+        }
+        @media (max-width: 480px) {
+            .song-card {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>歌詞瀏覽與搜尋系統</h1>
+        
+        <div class="upload-section">
+            <h2>上傳歌詞</h2>
+            <input type="text" id="songTitle" placeholder="歌曲名稱">
+            <input type="text" id="songArtist" placeholder="歌手名稱">
+            <textarea id="songLyrics" placeholder="請輸入歌詞..."></textarea>
+            <button id="uploadBtn">上傳歌詞</button>
+            <input type="file" id="fileUpload" accept=".txt,.json" multiple>
+            <button id="importBtn">從檔案匯入</button>
+        </div>
+        
+        <div class="search-section">
+            <h2>搜尋歌詞</h2>
+            <input type="text" id="searchInput" placeholder="輸入關鍵字搜尋歌詞...">
+            <button id="searchBtn">搜尋</button>
+            <button id="clearSearchBtn">清除搜尋</button>
+        </div>
+        
+        <div class="songs-section">
+            <h2>歌曲列表</h2>
+            <div class="song-list" id="songList">
+                <!-- 歌曲卡片將在這裡動態生成 -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 儲存所有歌曲的陣列
+        let songs = [];
+        
+        // DOM元素
+        const songTitleInput = document.getElementById('songTitle');
+        const songArtistInput = document.getElementById('songArtist');
+        const songLyricsInput = document.getElementById('songLyrics');
+        const uploadBtn = document.getElementById('uploadBtn');
+        const fileUploadInput = document.getElementById('fileUpload');
+        const importBtn = document.getElementById('importBtn');
+        const searchInput = document.getElementById('searchInput');
+        const searchBtn = document.getElementById('searchBtn');
+        const clearSearchBtn = document.getElementById('clearSearchBtn');
+        const songListContainer = document.getElementById('songList');
+        
+        // 初始化
+        document.addEventListener('DOMContentLoaded', () => {
+            // 從本地儲存載入歌曲
+            const savedSongs = localStorage.getItem('songs');
+            if (savedSongs) {
+                songs = JSON.parse(savedSongs);
+                renderSongList();
+            }
+            
+            // 綁定事件監聽器
+            uploadBtn.addEventListener('click', uploadSong);
+            importBtn.addEventListener('click', () => fileUploadInput.click());
+            fileUploadInput.addEventListener('change', handleFileUpload);
+            searchBtn.addEventListener('click', searchLyrics);
+            clearSearchBtn.addEventListener('click', clearSearch);
+            searchInput.addEventListener('keyup', (e) => {
+                if (e.key === 'Enter') {
+                    searchLyrics();
+                }
+            });
+        });
+        
+        // 上傳歌曲
+        function uploadSong() {
+            const title = songTitleInput.value.trim();
+            const artist = songArtistInput.value.trim();
+            const lyrics = songLyricsInput.value.trim();
+            
+            if (!title || !lyrics) {
+                alert('請填寫歌曲名稱和歌詞');
+                return;
+            }
+            
+            const newSong = {
+                id: Date.now(),
+                title,
+                artist,
+                lyrics,
+                createdAt: new Date().toISOString()
+            };
+            
+            songs.push(newSong);
+            saveSongs();
+            renderSongList();
+            
+            // 清空輸入欄位
+            songTitleInput.value = '';
+            songArtistInput.value = '';
+            songLyricsInput.value = '';
+        }
+        
+        // 處理檔案上傳
+        function handleFileUpload(event) {
+            const files = event.target.files;
+            if (files.length === 0) return;
+            
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                const reader = new FileReader();
+                
+                reader.onload = function(e) {
+                    try {
+                        let importedSongs = [];
+                        
+                        if (file.name.endsWith('.json')) {
+                            // 處理JSON檔案
+                            importedSongs = JSON.parse(e.target.result);
+                            if (!Array.isArray(importedSongs)) {
+                                importedSongs = [importedSongs];
+                            }
+                        } else {
+                            // 處理純文字檔案
+                            const content = e.target.result;
+                            const lines = content.split('\n');
+                            let title = file.name.replace('.txt', '');
+                            let artist = '';
+                            let lyrics = '';
+                            
+                            // 簡單解析文字檔案 (假設第一行是標題，第二行是歌手，其餘是歌詞)
+                            if (lines.length > 0) title = lines[0].trim() || title;
+                            if (lines.length > 1) artist = lines[1].trim();
+                            if (lines.length > 2) lyrics = lines.slice(2).join('\n').trim();
+                            
+                            importedSongs.push({
+                                title,
+                                artist,
+                                lyrics,
+                                id: Date.now() + i,
+                                createdAt: new Date().toISOString()
+                            });
+                        }
+                        
+                        songs = [...songs, ...importedSongs];
+                        saveSongs();
+                        renderSongList();
+                    } catch (error) {
+                        console.error('檔案解析錯誤:', error);
+                        alert(`檔案 ${file.name} 解析錯誤，請檢查格式`);
+                    }
+                };
+                
+                reader.readAsText(file);
+            }
+            
+            // 重置檔案輸入，允許重複上傳相同檔案
+            event.target.value = '';
+        }
+        
+        // 搜尋歌詞
+        function searchLyrics() {
+            const searchTerm = searchInput.value.trim().toLowerCase();
+            if (!searchTerm) return;
+            
+            const filteredSongs = songs.map(song => {
+                const lyricsLower = song.lyrics.toLowerCase();
+                const index = lyricsLower.indexOf(searchTerm);
+                
+                if (index !== -1) {
+                    // 找到匹配，創建帶有高亮標記的歌詞版本
+                    const before = song.lyrics.substring(0, index);
+                    const match = song.lyrics.substring(index, index + searchTerm.length);
+                    const after = song.lyrics.substring(index + searchTerm.length);
+                    
+                    const highlightedLyrics = `${before}<span class="highlight">${match}</span>${after}`;
+                    
+                    return {
+                        ...song,
+                        highlightedLyrics,
+                        showInSearch: true
+                    };
+                }
+                return {
+                    ...song,
+                    showInSearch: false
+                };
+            });
+            
+            renderSongList(filteredSongs);
+        }
+        
+        // 清除搜尋
+        function clearSearch() {
+            searchInput.value = '';
+            renderSongList();
+        }
+        
+        // 渲染歌曲列表
+        function renderSongList(songsToRender = songs) {
+            songListContainer.innerHTML = '';
+            
+            if (songsToRender.length === 0) {
+                songListContainer.innerHTML = '<p>目前沒有歌曲，請上傳歌詞。</p>';
+                return;
+            }
+            
+            // 按創建時間排序 (最新的在前面)
+            const sortedSongs = [...songsToRender].sort((a, b) => 
+                new Date(b.createdAt) - new Date(a.createdAt));
+            
+            sortedSongs.forEach(song => {
+                if (song.showInSearch === false) return;
+                
+                const songCard = document.createElement('div');
+                songCard.className = 'song-card';
+                
+                const title = song.title || '未知歌曲';
+                const artist = song.artist ? ` - ${song.artist}` : '';
+                
+                songCard.innerHTML = `
+                    <h3>${title}${artist}</h3>
+                    <div class="lyrics">${song.highlightedLyrics || song.lyrics}</div>
+                    <button onclick="deleteSong(${song.id})">刪除</button>
+                `;
+                
+                songListContainer.appendChild(songCard);
+            });
+        }
+        
+        // 刪除歌曲
+        function deleteSong(id) {
+            if (confirm('確定要刪除這首歌嗎？')) {
+                songs = songs.filter(song => song.id !== id);
+                saveSongs();
+                renderSongList();
+            }
+        }
+        
+        // 儲存歌曲到本地儲存
+        function saveSongs() {
+            localStorage.setItem('songs', JSON.stringify(songs));
+        }
+        
+        // 暴露刪除函數給全局作用域
+        window.deleteSong = deleteSong;
+    </script>
+</body>
+</html>
